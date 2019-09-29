@@ -70,7 +70,7 @@ public class AdaptCachedBodyGlobalFilter
 			return chain.filter(exchange);
 		}
 
-		return ServerWebExchangeUtils.cacheRequestBody2(exchange,
+		return ServerWebExchangeUtils.cacheRequestBody(exchange,
 				(serverHttpRequest) -> chain
 						.filter(exchange.mutate().request(serverHttpRequest).build()));
 	}

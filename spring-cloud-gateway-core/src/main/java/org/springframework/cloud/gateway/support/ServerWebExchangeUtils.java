@@ -324,10 +324,8 @@ public final class ServerWebExchangeUtils {
 							}).flux();
 						}
 					};
-					if (true) {
-						exchange.getAttributes().put(
-								CACHED_SERVER_HTTP_REQUEST_DECORATOR_ATTR, decorator);
-					}
+					exchange.getAttributes().put(
+							CACHED_SERVER_HTTP_REQUEST_DECORATOR_ATTR, decorator);
 					return function.apply(decorator);
 				});
 	}
@@ -341,8 +339,8 @@ public final class ServerWebExchangeUtils {
 	 * @param <T> generic type for the return {@link Mono}.
 	 * @return Mono of type T created by the function parameter.
 	 */
-	public static <T> Mono<Void> cacheRequestBody2(ServerWebExchange exchange,
-			Function<ServerHttpRequest, Mono<T>> function) {
+	public static <T> Mono<Void> cacheRequestBody(ServerWebExchange exchange,
+												  Function<ServerHttpRequest, Mono<T>> function) {
 		// Join all the DataBuffers so we have a single DataBuffer for the body
 		final String requestProcessingFinishedMark = "requestProcessingFinishedMark";
 		Mono<String> body = DataBufferUtils.join(exchange.getRequest().getBody())
