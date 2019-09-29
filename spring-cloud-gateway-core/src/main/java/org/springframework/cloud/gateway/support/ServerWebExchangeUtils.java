@@ -308,9 +308,9 @@ public final class ServerWebExchangeUtils {
 	 * @param <T> generic type for the return {@link Mono}.
 	 * @return Mono of type T created by the function parameter.
 	 */
-	public static <T> Mono<T> cacheRequestBody(ServerWebExchange exchange,
+	public static <T> Mono<Void> cacheRequestBody2(ServerWebExchange exchange,
 			Function<ServerHttpRequest, Mono<T>> function) {
-		return cacheRequestBody(exchange, false, function);
+		return cacheRequestBody2(exchange, false, function);
 	}
 
 	/**
@@ -363,6 +363,46 @@ public final class ServerWebExchangeUtils {
 					}
 					return function.apply(decorator);
 				});
+	}
+
+	private static <T> Mono<Void> cacheRequestBody2(ServerWebExchange exchange,
+			boolean cacheDecoratedRequest,
+			Function<ServerHttpRequest, Mono<T>> function) {
+		// Join all the DataBuffers so we have a single DataBuffer for the body
+		Mono<String> body = DataBufferUtils.join(exchange.getRequest().getBody())
+				.flatMap(dataBuffer -> {
+					if (dataBuffer.readableByteCount() > 0) {
+						if (log.isTraceEnabled()) {
+							log.trace("retaining body in exchange attribute");
+						}
+						exchange.getAttributes().put(CACHED_REQUEST_BODY_ATTR,
+								dataBuffer);
+					}
+
+					ServerHttpRequestDecorator decorator = new ServerHttpRequestDecorator(
+							exchange.getRequest()) {
+						@Override
+						public Flux<DataBuffer> getBody() {
+							return Mono.<DataBuffer>fromSupplier(() -> {
+								if (exchange.getAttributeOrDefault(
+										CACHED_REQUEST_BODY_ATTR, null) == null) {
+									// probably == downstream closed
+									return null;
+								}
+								// TODO: deal with Netty
+								NettyDataBuffer pdb = (NettyDataBuffer) dataBuffer;
+								return pdb.factory()
+										.wrap(pdb.getNativeBuffer().retainedSlice());
+							}).flux();
+						}
+					};
+					if (cacheDecoratedRequest) {
+						exchange.getAttributes().put(
+								CACHED_SERVER_HTTP_REQUEST_DECORATOR_ATTR, decorator);
+					}
+					return function.apply(decorator).thenReturn("");
+				}).switchIfEmpty(function.apply(exchange.getRequest()).thenReturn(""));
+		return body.then();
 	}
 
 }
