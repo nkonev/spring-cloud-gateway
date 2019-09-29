@@ -296,39 +296,6 @@ public final class ServerWebExchangeUtils {
 	 */
 	public static <T> Mono<T> cacheRequestBodyAndRequest(ServerWebExchange exchange,
 			Function<ServerHttpRequest, Mono<T>> function) {
-		return cacheRequestBody(exchange, true, function);
-	}
-
-	/**
-	 * Caches the request body in a ServerWebExchange attributes. The attribute is
-	 * {@link #CACHED_REQUEST_BODY_ATTR}. This method is useful when the
-	 * {@link ServerWebExchange} can be mutated, such as a {@link GatewayFilterFactory}/
-	 * @param exchange the available ServerWebExchange.
-	 * @param function a function that accepts the created ServerHttpRequestDecorator.
-	 * @param <T> generic type for the return {@link Mono}.
-	 * @return Mono of type T created by the function parameter.
-	 */
-	public static <T> Mono<Void> cacheRequestBody2(ServerWebExchange exchange,
-			Function<ServerHttpRequest, Mono<T>> function) {
-		return cacheRequestBody2(exchange, false, function);
-	}
-
-	/**
-	 * Caches the request body in a ServerWebExchange attribute. The attribute is
-	 * {@link #CACHED_REQUEST_BODY_ATTR}. If this method is called from a location that
-	 * can not mutate the ServerWebExchange (such as a Predicate), setting
-	 * cacheDecoratedRequest to true will put a {@link ServerHttpRequestDecorator} in an
-	 * attribute {@link #CACHED_SERVER_HTTP_REQUEST_DECORATOR_ATTR} for adaptation later.
-	 * @param exchange the available ServerWebExchange.
-	 * @param cacheDecoratedRequest if true, the ServerHttpRequestDecorator will be
-	 * cached.
-	 * @param function a function that accepts the created ServerHttpRequestDecorator.
-	 * @param <T> generic type for the return {@link Mono}.
-	 * @return Mono of type T created by the function parameter.
-	 */
-	private static <T> Mono<T> cacheRequestBody(ServerWebExchange exchange,
-			boolean cacheDecoratedRequest,
-			Function<ServerHttpRequest, Mono<T>> function) {
 		// Join all the DataBuffers so we have a single DataBuffer for the body
 		return DataBufferUtils.join(exchange.getRequest().getBody())
 				.flatMap(dataBuffer -> {
@@ -357,7 +324,7 @@ public final class ServerWebExchangeUtils {
 							}).flux();
 						}
 					};
-					if (cacheDecoratedRequest) {
+					if (true) {
 						exchange.getAttributes().put(
 								CACHED_SERVER_HTTP_REQUEST_DECORATOR_ATTR, decorator);
 					}
@@ -365,10 +332,19 @@ public final class ServerWebExchangeUtils {
 				});
 	}
 
-	private static <T> Mono<Void> cacheRequestBody2(ServerWebExchange exchange,
-			boolean cacheDecoratedRequest,
+	/**
+	 * Caches the request body in a ServerWebExchange attributes. The attribute is
+	 * {@link #CACHED_REQUEST_BODY_ATTR}. This method is useful when the
+	 * {@link ServerWebExchange} can be mutated, such as a {@link GatewayFilterFactory}/
+	 * @param exchange the available ServerWebExchange.
+	 * @param function a function that accepts the created ServerHttpRequestDecorator.
+	 * @param <T> generic type for the return {@link Mono}.
+	 * @return Mono of type T created by the function parameter.
+	 */
+	public static <T> Mono<Void> cacheRequestBody2(ServerWebExchange exchange,
 			Function<ServerHttpRequest, Mono<T>> function) {
 		// Join all the DataBuffers so we have a single DataBuffer for the body
+		final String requestProcessingFinishedMark = "requestProcessingFinishedMark";
 		Mono<String> body = DataBufferUtils.join(exchange.getRequest().getBody())
 				.flatMap(dataBuffer -> {
 					if (dataBuffer.readableByteCount() > 0) {
@@ -396,12 +372,10 @@ public final class ServerWebExchangeUtils {
 							}).flux();
 						}
 					};
-					if (cacheDecoratedRequest) {
-						exchange.getAttributes().put(
-								CACHED_SERVER_HTTP_REQUEST_DECORATOR_ATTR, decorator);
-					}
-					return function.apply(decorator).thenReturn("");
-				}).switchIfEmpty(function.apply(exchange.getRequest()).thenReturn(""));
+					return function.apply(decorator)
+							.thenReturn(requestProcessingFinishedMark);
+				}).switchIfEmpty(function.apply(exchange.getRequest())
+						.thenReturn(requestProcessingFinishedMark));
 		return body.then();
 	}
 
