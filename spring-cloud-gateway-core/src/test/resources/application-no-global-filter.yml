@@ -1,0 +1,12 @@
+test:
+  hostport: httpbin.org:80
+  #  hostport: localhost:5000
+  #  uri: http://${test.hostport}
+  uri: lb://testservice
+
+spring:
+  profiles:
+    include: logging
+  cloud:
+    gateway:
+      default-filters: []

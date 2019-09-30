@@ -70,9 +70,15 @@ public class AdaptCachedBodyGlobalFilter
 			return chain.filter(exchange);
 		}
 
-		return ServerWebExchangeUtils.cacheRequestBody(exchange,
-				(serverHttpRequest) -> chain
-						.filter(exchange.mutate().request(serverHttpRequest).build()));
+		final Mono<String> requestProcessingFinishedFlag = Mono
+				.just("requestProcessingFinishedFlag");
+		return ServerWebExchangeUtils
+				.cacheRequestBody(exchange,
+						(serverHttpRequest) -> chain.filter(
+								exchange.mutate().request(serverHttpRequest).build())
+								.then(requestProcessingFinishedFlag))
+				.switchIfEmpty(chain.filter(exchange).then(requestProcessingFinishedFlag))
+				.then();
 	}
 
 	@Override

@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.netflix.loadbalancer.Server;
@@ -27,6 +28,7 @@ import com.netflix.loadbalancer.ServerList;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.hamcrest.CoreMatchers;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -34,6 +36,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.rule.OutputCapture;
 import org.springframework.boot.web.server.LocalServerPort;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.factory.RetryGatewayFilterFactory.RetryConfig;
@@ -49,11 +52,15 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.junit4.SpringRunner;
+import org.springframework.test.web.reactive.server.FluxExchangeResult;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.reactive.function.client.ExchangeStrategies;
+import reactor.core.publisher.Mono;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.boot.test.context.SpringBootTest.WebEnvironment.RANDOM_PORT;
@@ -106,6 +113,22 @@ public class RetryGatewayFilterFactoryIntegrationTests extends BaseWebClientTest
 				.header(HttpHeaders.HOST, "www.retrypostconfig.org")
 				.syncBody("HelloConfig").exchange().expectStatus().isOk()
 				.expectBody(String.class).isEqualTo("3");
+	}
+
+	@Rule
+	public final OutputCapture capture = new OutputCapture();
+
+	@Test
+	public void retryFilterPostOneTime() throws InterruptedException {
+		capture.reset();
+		testClient.post()
+				.uri("/retrypost?key=postconfig&expectedbody=HelloConfig&count=1")
+				.header(HttpHeaders.HOST, "www.retrypostconfig.org")
+				.syncBody("HelloConfig").exchange().expectStatus().isOk()
+				.expectBody(String.class).isEqualTo("1");
+		assertThat(this.capture.toString()).contains("setting new iteration in attr 0");
+		assertThat(this.capture.toString())
+				.doesNotContain("setting new iteration in attr 1");
 	}
 
 	@Test
