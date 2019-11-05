@@ -19,7 +19,7 @@ spring:
           filters:
             - name: Retry
               args:
-                methods: GET,POST
+                repeatMethods: GET,POST
         # =====================================
         - id: retry_post_test
           uri: ${test.uri}
@@ -28,4 +28,4 @@ spring:
           filters:
             - name: Retry
               args:
-                methods: GET,POST
+                repeatMethods: GET,POST

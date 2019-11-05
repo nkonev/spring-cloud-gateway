@@ -153,6 +153,28 @@ public class RetryGatewayFilterFactoryIntegrationTests extends BaseWebClientTest
 	}
 
 	@Test
+	public void notRetriesSleepyRequestPut() throws Exception {
+		testClient.mutate().responseTimeout(Duration.ofSeconds(10)).build().put()
+				.uri("/sleep?key=notRetriesSleepyRequestPut&millis=3000")
+				.header(HttpHeaders.HOST, "www.retry-and-repeat-java.org").exchange()
+				.expectStatus().isEqualTo(HttpStatus.GATEWAY_TIMEOUT);
+
+		assertThat(TestConfig.map.get("notRetriesSleepyRequestPut")).isNotNull().hasValue(1);
+	}
+
+	@Test
+	public void retriesSleepyRequestGet() throws Exception {
+		testClient.mutate().responseTimeout(Duration.ofSeconds(20)).build().get()
+				.uri("/sleep?key=sleepyRequestGet&millis=3000")
+				.header(HttpHeaders.HOST, "www.retry-and-repeat-java.org")
+				.exchange()
+				.expectStatus().isEqualTo(HttpStatus.GATEWAY_TIMEOUT);
+
+
+		assertThat(TestConfig.map.get("sleepyRequestGet")).isNotNull().hasValue(3);
+	}
+
+	@Test
 	@SuppressWarnings("unchecked")
 	public void retryFilterLoadBalancedWithMultipleServers() {
 		String host = "www.retrywithloadbalancer.org";
@@ -261,7 +283,12 @@ public class RetryGatewayFilterFactoryIntegrationTests extends BaseWebClientTest
 									.retry(config -> config.setRetries(2)
 											.setMethods(HttpMethod.POST, HttpMethod.GET)))
 							.uri(uri))
-
+					.route("retry_one_method_repeat_two_methods_test", r -> r.host("**.retry-and-repeat-java.org")
+							.filters(f -> f.prefixPath("/httpbin")
+									.retry(config -> config.setRetries(2)
+											.setRepeatMethods(HttpMethod.POST, HttpMethod.GET)
+											.setRetryMethods(HttpMethod.GET)))
+							.uri(uri))
 					.route("retry_with_backoff", r -> r.host("**.retrywithbackoff.org")
 							.filters(f -> f.prefixPath("/httpbin").retry(config -> {
 								config.setRetries(2).setBackoff(Duration.ofMillis(100),

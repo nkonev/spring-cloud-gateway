@@ -29,6 +29,7 @@ import java.util.function.Supplier;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.reactivestreams.Publisher;
+import org.springframework.cloud.gateway.filter.ratelimit.RedisRateLimiter;
 import reactor.core.publisher.Mono;
 import reactor.retry.Backoff;
 import reactor.retry.Repeat;
@@ -100,11 +101,11 @@ public class RetryGatewayFilterFactory
 						retryConfig::getStatuses, retryConfig::getSeries);
 
 				HttpMethod httpMethod = exchange.getRequest().getMethod();
-				boolean retryableMethod = retryConfig.getMethods().contains(httpMethod);
+				boolean repeatableMethod = retryConfig.getRepeatMethods().contains(httpMethod);
 
-				trace("retryableMethod: %b, httpMethod %s, configured methods %s",
-						() -> retryableMethod, () -> httpMethod, retryConfig::getMethods);
-				return retryableMethod && finalRetryableStatusCode;
+				trace("repeatableMethod: %b, httpMethod %s, configured repeatMethods %s",
+						() -> repeatableMethod, () -> httpMethod, retryConfig::getRepeatMethods);
+				return repeatableMethod && finalRetryableStatusCode;
 			};
 
 			statusCodeRepeat = Repeat.onlyIf(repeatPredicate)
@@ -121,6 +122,8 @@ public class RetryGatewayFilterFactory
 		Retry<ServerWebExchange> exceptionRetry = null;
 		if (!retryConfig.getExceptions().isEmpty()) {
 			Predicate<RetryContext<ServerWebExchange>> retryContextPredicate = context -> {
+				ServerWebExchange exchange = context.applicationContext();
+
 				if (exceedsMaxIterations(context.applicationContext(), retryConfig)) {
 					return false;
 				}
@@ -133,7 +136,12 @@ public class RetryGatewayFilterFactory
 						trace("exception or its cause is retryable %s, configured exceptions %s",
 								() -> getExceptionNameWithCause(exception),
 								retryConfig::getExceptions);
-						return true;
+
+						HttpMethod httpMethod = exchange.getRequest().getMethod();
+						boolean retryableMethod = retryConfig.getRetryMethods().contains(httpMethod);
+						trace("retryableMethod: %b, httpMethod %s, configured retryMethods %s",
+								() -> retryableMethod, () -> httpMethod, retryConfig::getRetryMethods);
+						return retryableMethod;
 					}
 				}
 				trace("exception or its cause is not retryable %s, configured exceptions %s",
@@ -165,7 +173,8 @@ public class RetryGatewayFilterFactory
 						.append("retries", retryConfig.getRetries())
 						.append("series", retryConfig.getSeries())
 						.append("statuses", retryConfig.getStatuses())
-						.append("methods", retryConfig.getMethods())
+						.append("repeatMethods", retryConfig.getRepeatMethods())
+						.append("retryMethods", retryConfig.getRetryMethods())
 						.append("exceptions", retryConfig.getExceptions()).toString();
 			}
 		};
@@ -277,7 +286,9 @@ public class RetryGatewayFilterFactory
 
 		private List<HttpStatus> statuses = new ArrayList<>();
 
-		private List<HttpMethod> methods = toList(HttpMethod.GET);
+		private List<HttpMethod> retryMethods = Arrays.asList(HttpMethod.values());
+
+		private List<HttpMethod> repeatMethods = toList(HttpMethod.GET);
 
 		private List<Class<? extends Throwable>> exceptions = toList(IOException.class,
 				TimeoutException.class);
@@ -285,7 +296,7 @@ public class RetryGatewayFilterFactory
 		private BackoffConfig backoff;
 
 		public RetryConfig allMethods() {
-			return setMethods(HttpMethod.values());
+			return setRepeatMethods(HttpMethod.values());
 		}
 
 		public void validate() {
@@ -294,7 +305,8 @@ public class RetryGatewayFilterFactory
 					!this.series.isEmpty() || !this.statuses.isEmpty()
 							|| !this.exceptions.isEmpty(),
 					"series, status and exceptions may not all be empty");
-			Assert.notEmpty(this.methods, "methods may not be empty");
+			Assert.notEmpty(this.repeatMethods, "repeatMethods may not be empty");
+			Assert.notEmpty(this.retryMethods, "retryMethods may not be empty");
 			if (this.backoff != null) {
 				this.backoff.validate();
 			}
@@ -353,12 +365,20 @@ public class RetryGatewayFilterFactory
 			return this;
 		}
 
+		/**
+		 * @deprecated use  {@link RetryGatewayFilterFactory.RetryConfig#getRepeatMethods}
+		 */
+		@Deprecated
 		public List<HttpMethod> getMethods() {
-			return methods;
+			return getRepeatMethods();
 		}
 
+		/**
+		 * @deprecated use  {@link RetryGatewayFilterFactory.RetryConfig#setRepeatMethods}
+		 */
+		@Deprecated
 		public RetryConfig setMethods(HttpMethod... methods) {
-			this.methods = Arrays.asList(methods);
+			setRepeatMethods(methods);
 			return this;
 		}
 
@@ -371,6 +391,23 @@ public class RetryGatewayFilterFactory
 			return this;
 		}
 
+		public List<HttpMethod> getRetryMethods() {
+			return retryMethods;
+		}
+
+		public RetryConfig setRetryMethods(HttpMethod... retryMethods) {
+			this.retryMethods = Arrays.asList(retryMethods);
+			return this;
+		}
+
+		public List<HttpMethod> getRepeatMethods() {
+			return repeatMethods;
+		}
+
+		public RetryConfig setRepeatMethods(HttpMethod... repeatMethods) {
+			this.repeatMethods = Arrays.asList(repeatMethods);
+			return this;
+		}
 	}
 
 	public static class BackoffConfig {
